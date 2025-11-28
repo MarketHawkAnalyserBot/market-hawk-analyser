@@ -2,27 +2,27 @@ name: Market Hawk Patrol
 
 on:
   schedule:
-    # Rulează zilnic la ora 9:00 AM (UTC)
+    # Runs daily at 09:00 UTC
     - cron: '0 9 * * *'
-  # Permite pornirea manuală
+  # Allows manual trigger
   workflow_dispatch:
 
 jobs:
   check-market:
     runs-on: ubuntu-latest
     steps:
-      - name: Descarcă Codul
+      - name: Checkout Codebase
         uses: actions/checkout@v3
 
-      - name: Instalează Python
+      - name: Setup Python Environment
         uses: actions/setup-python@v4
         with:
           python-version: '3.10'
 
-      - name: Instalează Dependințe
+      - name: Install Dependencies
         run: pip install requests
 
-      - name: Execută Misiunea
+      - name: Execute Arbitrage Scan
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
