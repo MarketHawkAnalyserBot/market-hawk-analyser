@@ -2,7 +2,7 @@
 MODULE: Infrastructure Audit Protocol (Internal)
 VERSION: 2.1-global
 TYPE: Proprietary / Educational Proof-of-Concept
-NOTE: Codebase defaults to 'Simulation Mode' if backend authorisation keys are missing.
+NOTE: Codebase defaults to 'Simulation Mode' if backend authorization keys are missing.
 """
 
 import requests
