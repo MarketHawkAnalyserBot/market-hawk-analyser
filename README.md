@@ -69,4 +69,4 @@ We specifically align with the investment philosophy of agile, mathematical, and
 ADDITIONAL READINGS on the same subject:
 https://www.reddit.com/r/technology/comments/1oofbht/big_short_michael_burry_bets_1bn_on_ai_bubble/
 https://www.markets.com/analysis/ai-investment-risk-michael-burry-jim-chanos-warnings-2112-en
-text ONLY extraction, for argumentative purposes ONLY: "C:\Users\eugdu\Pictures\Screenshots\BIGSHORT\MSN.txt"
+text ONLY extraction, for argumentative purposes ONLY: \BIGSHORT\MSN.txt ONLY version of this website location: https://www.msn.com/en-us/money/savingandinvesting/economist-sends-startling-warning-after-big-short-s-ai-call/ar-AA1QjL2S
