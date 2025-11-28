@@ -1,52 +1,25 @@
 import requests
 import json
 import os
-import sys
 
 # --- CONFIGURARE ---
-TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
-TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
-
-# Căutăm orice fel de H100 (SXM, PCIe, NVL)
-TARGET_GPU_NAME = "H100" 
 API_URL = "https://console.vast.ai/api/v0/bundles/"
 
-# PRAGURILE ($)
-WARNING_PRICE = 2.50
-DANGER_PRICE = 2.00
-
-def send_telegram(message):
-    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        print("❌ Lipsesc cheile Telegram. Nu pot trimite alerta.")
-        return
-        
-    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
-        "parse_mode": "Markdown"
-    }
-    try:
-        requests.post(url, json=payload)
-    except Exception as e:
-        print(f"Eroare Telegram: {e}")
-
-def get_market_price():
-    # --- SCHIMBARE STRATEGIE: CĂUTARE LARGĂ ---
-    # Nu mai cerem "Verified". Cerem tot ce e "Rentable" (închiriatibil).
+def spy_on_market():
+    # STRATEGIA: Cautam dupa MEMORIE (RAM), nu dupa nume.
+    # H100 are 80GB RAM. Cerem tot ce are peste 75GB RAM.
+    # Asta include A100 si H100.
     query_params = {
         "rentable": {"eq": True},
-        "gpu_name": {"eq": TARGET_GPU_NAME},
-        "type": "on-demand"
+        "gpu_ram": {"gt": 75000}  # Mai mult de 75.000 MB
     }
     
-    # Masca (Browser)
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"
     }
 
     try:
-        print(f"📡 Scanez piața Vast.ai pentru ORICE '{TARGET_GPU_NAME}'...")
+        print("📡 SONDA ACTIVATĂ: Caut monștrii cu >80GB RAM...")
         response = requests.get(
             API_URL, 
             params={"q": json.dumps(query_params)}, 
@@ -57,67 +30,45 @@ def get_market_price():
         if response.status_code == 200:
             data = response.json()
             offers = data.get('offers', [])
-            print(f"✅ Am găsit {len(offers)} oferte totale.")
+            print(f"✅ Sonda a găsit {len(offers)} servere grele.")
             
             if offers:
-                # Filtrăm și curățăm prețurile
-                valid_prices = []
-                for o in offers:
-                    # Ne asigurăm că e un preț valid
-                    if 'dph_total' in o:
-                        price = float(o['dph_total'])
-                        # Eliminăm erorile de preț (sub 10 cenți e imposibil)
-                        if price > 0.1:
-                            valid_prices.append(price)
+                # Facem un recensământ al numelor
+                nume_gasite = set()
+                h100_gasiti = 0
+                cel_mai_mic_pret = 100.0
                 
-                if valid_prices:
-                    min_price = min(valid_prices)
-                    # DEBUG: Arată-mi primele 3 prețuri găsite ca să fiu sigur
-                    valid_prices.sort()
-                    print(f"Top 3 cele mai mici prețuri găsite: {valid_prices[:3]}")
-                    return min_price
+                print("\n--- CE AM GĂSIT ÎN BULETIN ---")
+                for o in offers:
+                    nume = o.get('gpu_name', 'Necunoscut')
+                    pret = float(o.get('dph_total', 0))
+                    
+                    # Adăugăm numele în lista unică
+                    nume_gasite.add(nume)
+                    
+                    # Căutăm manual textul "H100" în nume
+                    if "H100" in nume:
+                        h100_gasiti += 1
+                        if pret < cel_mai_mic_pret:
+                            cel_mai_mic_pret = pret
+
+                # Afișăm catalogul exact
+                for n in nume_gasite:
+                    print(f"👉 Nume Oficial: '{n}'")
+                
+                print("-" * 30)
+                if h100_gasiti > 0:
+                    print(f"💎 VICTORIE: Am identificat {h100_gasiti} unități H100!")
+                    print(f"💰 Cel mai mic preț H100: ${cel_mai_mic_pret:.4f}")
                 else:
-                    print("⚠️ Ofertele există, dar nu au preț valid setat.")
-                    return None
+                    print("⚠️ Am găsit servere puternice (A100 probabil), dar niciunul nu conține textul 'H100'.")
             else:
-                print("⚠️ Zero oferte găsite. Piața e goală sau API-ul a schimbat numele.")
-                return None
+                print("⚠️ Niciun server 'greu' disponibil. Ciudat.")
         else:
-            print(f"❌ Serverul a refuzat cererea. Cod: {response.status_code}")
-            return None
+            print(f"❌ Serverul ne-a refuzat. Cod: {response.status_code}")
             
     except Exception as e:
-        print(f"❌ Eroare Conexiune: {e}")
-    return None
-
-def main():
-    print("--- Market Hawk 2.0 (Wide Net) ---")
-    current_price = get_market_price()
-    
-    if current_price is None:
-        print("❌ CRITIC: Nu am putut stabili un preț de referință.")
-        return
-        
-    print(f"\n💎 PRETUL PIETEI (FLOOR PRICE): ${current_price:.4f}")
-
-    # LOGICA DE ALERTARE
-    if current_price <= DANGER_PRICE:
-        msg = (f"🚨 *TITANIC MODE ACTIVAT* 🚨\n\n"
-               f"H100 la lichidare: *${current_price}/oră*\n"
-               f"Sub pragul critic de ${DANGER_PRICE}.\n"
-               f"Cumpără ACUM!")
-        send_telegram(msg)
-        print(">> Alarma Roșie trimisă!")
-        
-    elif current_price <= WARNING_PRICE:
-        msg = (f"⚠️ *Market Hawk Alert* ⚠️\n\n"
-               f"H100 a scăzut la: *${current_price}/oră*\n"
-               f"Atenție, preț bun.")
-        send_telegram(msg)
-        print(">> Alarma Galbenă trimisă!")
-        
-    else:
-        print(f">> Prețul (${current_price}) este stabil (peste ${WARNING_PRICE}).")
+        print(f"❌ Eroare: {e}")
 
 if __name__ == "__main__":
-    main()
+    spy_on_market()
