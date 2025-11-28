@@ -4,7 +4,7 @@ on:
   schedule:
     # Rulează zilnic la ora 9:00 AM (UTC)
     - cron: '0 9 * * *'
-  # Permite pornirea manuală de test
+  # Permite pornirea manuală
   workflow_dispatch:
 
 jobs:
@@ -26,4 +26,5 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          SECRET_MARKET_URL: ${{ secrets.SECRET_MARKET_URL }}
         run: python main.py
