@@ -1,74 +1,91 @@
+"""
+MODULE: Infrastructure Audit Protocol (Internal)
+VERSION: 2.1-global
+TYPE: Proprietary / Educational Proof-of-Concept
+NOTE: Codebase defaults to 'Simulation Mode' if backend authorisation keys are missing.
+"""
+
 import requests
 import json
 import os
+import sys
 
-# --- CONFIGURARE ---
-API_URL = "https://console.vast.ai/api/v0/bundles/"
+# --- SECURE CONFIGURATION ---
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+TARGET_ENDPOINT = os.environ.get("SECRET_MARKET_URL") 
 
-def spy_on_market():
-    # STRATEGIA: Cautam dupa MEMORIE (RAM), nu dupa nume.
-    # H100 are 80GB RAM. Cerem tot ce are peste 75GB RAM.
-    # Asta include A100 si H100.
+# THRESHOLDS ($)
+DANGER_PRICE = 1.50
+
+def send_telegram(message):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        return
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
+    try:
+        requests.post(url, json=payload)
+    except:
+        pass
+
+def get_market_data():
+    # --- SECURITY TRAP (SIMULATION MODE) ---
+    if not TARGET_ENDPOINT:
+        print("\n⚠️  SECURITY ALERT: Authorized Endpoint Key missing.")
+        print("🔄  System switching to: DEMO / SIMULATION MODE.")
+        print("    (No live data will be fetched. Exiting safely.)")
+        return None
+
+    # --- LIVE EXECUTION ---
     query_params = {
         "rentable": {"eq": True},
-        "gpu_ram": {"gt": 75000}  # Mai mult de 75.000 MB
+        "gpu_ram": {"gt": 75000}, 
+        "type": "on-demand"
     }
     
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"
-    }
+    headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120.0.0.0 Safari/537.36"}
 
     try:
-        print("📡 SONDA ACTIVATĂ: Caut monștrii cu >80GB RAM...")
-        response = requests.get(
-            API_URL, 
-            params={"q": json.dumps(query_params)}, 
-            headers=headers, 
-            timeout=30
-        )
+        print("📡 Authorized Source Detected. Initiating Encrypted Scan...")
+        response = requests.get(TARGET_ENDPOINT, params={"q": json.dumps(query_params)}, headers=headers, timeout=30)
         
         if response.status_code == 200:
             data = response.json()
             offers = data.get('offers', [])
-            print(f"✅ Sonda a găsit {len(offers)} servere grele.")
             
             if offers:
-                # Facem un recensământ al numelor
-                nume_gasite = set()
-                h100_gasiti = 0
-                cel_mai_mic_pret = 100.0
-                
-                print("\n--- CE AM GĂSIT ÎN BULETIN ---")
+                relevant_prices = []
                 for o in offers:
-                    nume = o.get('gpu_name', 'Necunoscut')
-                    pret = float(o.get('dph_total', 0))
+                    name = o.get('gpu_name', '')
+                    price = float(o.get('dph_total', 0))
                     
-                    # Adăugăm numele în lista unică
-                    nume_gasite.add(nume)
-                    
-                    # Căutăm manual textul "H100" în nume
-                    if "H100" in nume:
-                        h100_gasiti += 1
-                        if pret < cel_mai_mic_pret:
-                            cel_mai_mic_pret = pret
-
-                # Afișăm catalogul exact
-                for n in nume_gasite:
-                    print(f"👉 Nume Oficial: '{n}'")
+                    if "H100" in name and price > 0.1:
+                        relevant_prices.append(price)
                 
-                print("-" * 30)
-                if h100_gasiti > 0:
-                    print(f"💎 VICTORIE: Am identificat {h100_gasiti} unități H100!")
-                    print(f"💰 Cel mai mic preț H100: ${cel_mai_mic_pret:.4f}")
-                else:
-                    print("⚠️ Am găsit servere puternice (A100 probabil), dar niciunul nu conține textul 'H100'.")
-            else:
-                print("⚠️ Niciun server 'greu' disponibil. Ciudat.")
-        else:
-            print(f"❌ Serverul ne-a refuzat. Cod: {response.status_code}")
-            
+                if relevant_prices:
+                    min_price = min(relevant_prices)
+                    print(f"✅ Live Telemetry Acquired: {len(relevant_prices)} active nodes.")
+                    return min_price
     except Exception as e:
-        print(f"❌ Eroare: {e}")
+        print(f"Connection Error: {e}")
+    return None
+
+def main():
+    print("--- Market Hawk System Boot ---")
+    price = get_market_data()
+    
+    if price:
+        print(f"💎 MARKET FLOOR PRICE: ${price:.4f}")
+        
+        if price <= DANGER_PRICE:
+            msg = (f"🚨 *SIGNAL DETECTED* 🚨\n\n"
+                   f"Asset Price: *${price:.4f}/hr*\n"
+                   f"Threshold: ${DANGER_PRICE}\n"
+                   f"Status: OPPORTUNITY")
+            send_telegram(msg)
+            print(">> Encrypted Signal sent to Analyst.")
+    else:
+        print(">> System Idle (Simulation or No Data).")
 
 if __name__ == "__main__":
-    spy_on_market()
+    main()
