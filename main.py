@@ -3,19 +3,22 @@ import json
 import os
 import sys
 
-# --- CONFIGURARE ---
-# Citim cheile din seif
-TELEGRAM_TOKEN = os.environ["TELEGRAM_TOKEN"]
-TELEGRAM_CHAT_ID = os.environ["TELEGRAM_CHAT_ID"]
+# --- CONFIGURATION ---
+TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
+TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 TARGET_GPU = "H100 PCIe"
 API_URL = "https://console.vast.ai/api/v0/bundles/"
 
-# PRAGURILE DE SUPRAVIEȚUIRE ($)
-WARNING_PRICE = 2.20  # Galben: Pregătește banii
-DANGER_PRICE = 1.80   # Roșu: Bula s-a spart (Titanic)
+# THRESHOLDS
+WARNING_PRICE = 2.20
+DANGER_PRICE = 1.80
 
 def send_telegram(message):
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        print("❌ Telegram Keys missing! Skipping alert.")
+        return
+        
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
     payload = {
         "chat_id": TELEGRAM_CHAT_ID,
@@ -23,56 +26,84 @@ def send_telegram(message):
         "parse_mode": "Markdown"
     }
     try:
-        response = requests.post(url, json=payload)
-        print(f"Telegram status: {response.status_code}")
+        requests.post(url, json=payload)
     except Exception as e:
-        print(f"Eroare Telegram: {e}")
+        print(f"Telegram Error: {e}")
 
 def get_market_price():
+    # SEARCH QUERY
     query_params = {
         "verified": {"eq": True},
         "rentable": {"eq": True},
         "gpu_name": {"eq": TARGET_GPU},
         "type": "on-demand"
     }
+    
+    # THE MASK (User-Agent) - Tricks the server into thinking we are a browser
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+    }
+
     try:
-        response = requests.get(API_URL, params={"q": json.dumps(query_params)}, timeout=30)
+        print(f"📡 Connecting to Vast.ai for {TARGET_GPU}...")
+        response = requests.get(
+            API_URL, 
+            params={"q": json.dumps(query_params)}, 
+            headers=headers, 
+            timeout=30
+        )
+        
+        # DEBUGGING INFO
+        print(f"Server Response Code: {response.status_code}")
+        
         if response.status_code == 200:
             data = response.json()
             offers = data.get('offers', [])
+            print(f"Offers found: {len(offers)}")
+            
             if offers:
                 prices = [float(o['dph_total']) for o in offers]
                 return min(prices)
+            else:
+                print("⚠️ No offers found for this GPU type right now.")
+                return None
+        else:
+            print(f"❌ Server Error: {response.text}")
+            return None
+            
     except Exception as e:
-        print(f"Eroare Vast: {e}")
+        print(f"❌ Connection Error: {e}")
     return None
 
 def main():
-    print("--- Market Hawk Activat ---")
+    print("--- Market Hawk Activated ---")
     current_price = get_market_price()
     
     if current_price is None:
-        print("Nu s-au putut citi datele.")
-        sys.exit(0)
+        print("❌ CRITICAL: Could not read data.")
+        # We do not exit here, so we can see the logs
+        return
         
-    print(f"PRET ACTUAL PIATA: ${current_price}")
+    print(f"✅ MARKET PRICE DETECTED: ${current_price:.4f}")
 
-    # LOGICA DE RAZBOI
+    # LOGIC
     if current_price <= DANGER_PRICE:
-        msg = (f"🚨 *TITANIC MODE ACTIVAT* 🚨\n\n"
-               f"Prețul H100 a scăzut la: *${current_price}/oră*\n"
-               f"Limita critică ({DANGER_PRICE}$) a fost atinsă.\n"
-               f"Execută planul de investiții ACUM!")
+        msg = (f"🚨 *TITANIC MODE ACTIVATED* 🚨\n\n"
+               f"H100 Price Drop: *${current_price}/hr*\n"
+               f"Critical Limit ({DANGER_PRICE}$) breached.\n"
+               f"EXECUTE STRATEGY NOW!")
         send_telegram(msg)
+        print(">> Red Alert Sent.")
         
     elif current_price <= WARNING_PRICE:
-        msg = (f"⚠️ *Atenție Market Hawk* ⚠️\n\n"
-               f"Prețul H100 a coborât la: *${current_price}/oră*\n"
-               f"Ne apropiem de zona de impact.")
+        msg = (f"⚠️ *Market Hawk Alert* ⚠️\n\n"
+               f"H100 Price Dip: *${current_price}/hr*\n"
+               f"Approaching impact zone.")
         send_telegram(msg)
+        print(">> Warning Alert Sent.")
         
     else:
-        print("Pretul e inca SUS (Bula rezista). Nu trimit alerta ca sa nu deranjez.")
+        print(">> Price is STABLE (Above thresholds). No alert needed.")
 
 if __name__ == "__main__":
     main()
