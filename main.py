@@ -3,20 +3,21 @@ import json
 import os
 import sys
 
-# --- CONFIGURATION ---
+# --- CONFIGURARE ---
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-TARGET_GPU = "H100 PCIe"
+# Căutăm orice fel de H100 (SXM, PCIe, NVL)
+TARGET_GPU_NAME = "H100" 
 API_URL = "https://console.vast.ai/api/v0/bundles/"
 
-# THRESHOLDS
-WARNING_PRICE = 2.20
-DANGER_PRICE = 1.80
+# PRAGURILE ($)
+WARNING_PRICE = 2.50
+DANGER_PRICE = 2.00
 
 def send_telegram(message):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
-        print("❌ Telegram Keys missing! Skipping alert.")
+        print("❌ Lipsesc cheile Telegram. Nu pot trimite alerta.")
         return
         
     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
@@ -28,24 +29,24 @@ def send_telegram(message):
     try:
         requests.post(url, json=payload)
     except Exception as e:
-        print(f"Telegram Error: {e}")
+        print(f"Eroare Telegram: {e}")
 
 def get_market_price():
-    # SEARCH QUERY
+    # --- SCHIMBARE STRATEGIE: CĂUTARE LARGĂ ---
+    # Nu mai cerem "Verified". Cerem tot ce e "Rentable" (închiriatibil).
     query_params = {
-        "verified": {"eq": True},
         "rentable": {"eq": True},
-        "gpu_name": {"eq": TARGET_GPU},
+        "gpu_name": {"eq": TARGET_GPU_NAME},
         "type": "on-demand"
     }
     
-    # THE MASK (User-Agent) - Tricks the server into thinking we are a browser
+    # Masca (Browser)
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/91.0.4472.124 Safari/537.36"
     }
 
     try:
-        print(f"📡 Connecting to Vast.ai for {TARGET_GPU}...")
+        print(f"📡 Scanez piața Vast.ai pentru ORICE '{TARGET_GPU_NAME}'...")
         response = requests.get(
             API_URL, 
             params={"q": json.dumps(query_params)}, 
@@ -53,57 +54,70 @@ def get_market_price():
             timeout=30
         )
         
-        # DEBUGGING INFO
-        print(f"Server Response Code: {response.status_code}")
-        
         if response.status_code == 200:
             data = response.json()
             offers = data.get('offers', [])
-            print(f"Offers found: {len(offers)}")
+            print(f"✅ Am găsit {len(offers)} oferte totale.")
             
             if offers:
-                prices = [float(o['dph_total']) for o in offers]
-                return min(prices)
+                # Filtrăm și curățăm prețurile
+                valid_prices = []
+                for o in offers:
+                    # Ne asigurăm că e un preț valid
+                    if 'dph_total' in o:
+                        price = float(o['dph_total'])
+                        # Eliminăm erorile de preț (sub 10 cenți e imposibil)
+                        if price > 0.1:
+                            valid_prices.append(price)
+                
+                if valid_prices:
+                    min_price = min(valid_prices)
+                    # DEBUG: Arată-mi primele 3 prețuri găsite ca să fiu sigur
+                    valid_prices.sort()
+                    print(f"Top 3 cele mai mici prețuri găsite: {valid_prices[:3]}")
+                    return min_price
+                else:
+                    print("⚠️ Ofertele există, dar nu au preț valid setat.")
+                    return None
             else:
-                print("⚠️ No offers found for this GPU type right now.")
+                print("⚠️ Zero oferte găsite. Piața e goală sau API-ul a schimbat numele.")
                 return None
         else:
-            print(f"❌ Server Error: {response.text}")
+            print(f"❌ Serverul a refuzat cererea. Cod: {response.status_code}")
             return None
             
     except Exception as e:
-        print(f"❌ Connection Error: {e}")
+        print(f"❌ Eroare Conexiune: {e}")
     return None
 
 def main():
-    print("--- Market Hawk Activated ---")
+    print("--- Market Hawk 2.0 (Wide Net) ---")
     current_price = get_market_price()
     
     if current_price is None:
-        print("❌ CRITICAL: Could not read data.")
-        # We do not exit here, so we can see the logs
+        print("❌ CRITIC: Nu am putut stabili un preț de referință.")
         return
         
-    print(f"✅ MARKET PRICE DETECTED: ${current_price:.4f}")
+    print(f"\n💎 PRETUL PIETEI (FLOOR PRICE): ${current_price:.4f}")
 
-    # LOGIC
+    # LOGICA DE ALERTARE
     if current_price <= DANGER_PRICE:
-        msg = (f"🚨 *TITANIC MODE ACTIVATED* 🚨\n\n"
-               f"H100 Price Drop: *${current_price}/hr*\n"
-               f"Critical Limit ({DANGER_PRICE}$) breached.\n"
-               f"EXECUTE STRATEGY NOW!")
+        msg = (f"🚨 *TITANIC MODE ACTIVAT* 🚨\n\n"
+               f"H100 la lichidare: *${current_price}/oră*\n"
+               f"Sub pragul critic de ${DANGER_PRICE}.\n"
+               f"Cumpără ACUM!")
         send_telegram(msg)
-        print(">> Red Alert Sent.")
+        print(">> Alarma Roșie trimisă!")
         
     elif current_price <= WARNING_PRICE:
         msg = (f"⚠️ *Market Hawk Alert* ⚠️\n\n"
-               f"H100 Price Dip: *${current_price}/hr*\n"
-               f"Approaching impact zone.")
+               f"H100 a scăzut la: *${current_price}/oră*\n"
+               f"Atenție, preț bun.")
         send_telegram(msg)
-        print(">> Warning Alert Sent.")
+        print(">> Alarma Galbenă trimisă!")
         
     else:
-        print(">> Price is STABLE (Above thresholds). No alert needed.")
+        print(f">> Prețul (${current_price}) este stabil (peste ${WARNING_PRICE}).")
 
 if __name__ == "__main__":
     main()
