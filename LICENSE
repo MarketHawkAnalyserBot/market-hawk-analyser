@@ -1,0 +1,18 @@
+MARKET HAWK PROPRIETARY LICENSE
+Copyright (c) 2025 [G Dumitru]
+
+1. ACADEMIC & EDUCATIONAL USE ONLY
+   This software is provided specifically for educational demonstration and infrastructure audit simulations. 
+   Authorisation is granted to view and clone this repository for the purpose of academic review only.
+
+2. NO COMMERCIAL USE
+   Commercial use, redistribution, sub-licensing, or modification of this source code for profit-generating activities is STRICTLY PROHIBITED without explicit written permission from the copyright holder.
+
+3. PROPRIETARY ARCHITECTURE
+   The specific implementation of the CI/CD pipeline logic and the "Market Hawk" monitoring algorithm are intellectual property. Copying this architecture for use in competing projects is not permitted.
+
+4. DISCLAIMER
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND. 
+   Running this software without the appropriate environment keys (SECRET_MARKET_URL) will result in a restricted "Simulation Mode". The author is not responsible for any confusion arising from unauthorized execution.
+
+ALL RIGHTS RESERVED.
